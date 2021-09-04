@@ -1,0 +1,57 @@
+---
+title: "How To Connect Rstudio to MYSQL To Read Data"
+author: "Nnaemeka Okereafor"
+date: "`r Sys.Date()`"
+output:
+  prettydoc::html_pretty:
+    theme: architect
+    highlight: github
+
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## About The movie rating dataset:
+The code below typically demonstrate how to connect Rstudio to MYSQL database to read data from it. the dataset to read is a movie rating dataset with 44922 observations and 5 variables. To know more about the movie dataset, visit <https://www.kaggle.com/rounakbanik/the-movies-dataset>.
+
+
+## Databse Connection
+
+```{r message=FALSE, warning=FALSE}
+library(RODBC)
+library(tidyverse)
+library("lubridate")
+conn1 <- odbcConnect("MYSQL_NEWMAN")
+movie_data <- sqlQuery(conn1,"SELECT * FROM movie")
+head(movie_data, n=25)
+```
+
+## Dataset Dimension
+
+```{r}
+dim(movie_data)
+
+```
+
+## Names of Movies
+
+```{r}
+
+movies<-unique(movie_data$Title)
+movies
+
+```
+
+## Adding Derived variables to original movie rating dataset
+
+```{r}
+
+movie_data$Review_date <- as_datetime(movie_data$Tymestamp)
+movie_data$Weekday <- weekdays(movie_data$Review_date)
+movie_data$Year <- year(movie_data$Review_date)
+movie_data$Hour <- hour(movie_data$Review_date)
+head(movie_data, n=25)
+
+```
