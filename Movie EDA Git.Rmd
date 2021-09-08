@@ -1,0 +1,235 @@
+---
+title: "Movie Rating EDA"
+author: "Nnaemeka Newman Okereafor"
+output:
+  pdf_document: default
+  html_document:
+    includes:
+      in_header: header.html
+    css: ./lab.css
+    highlight: pygments
+    theme: cerulean
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: console
+
+---   
+
+```{r global_options, include=FALSE}
+#knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(eval = TRUE, message = FALSE, warning = FALSE)
+```
+
+## About The Dataset
+
+#### Original Dataset; source:
+
+<https://www.kaggle.com/rounakbanik/the-movies-dataset>
+
+```{r message=FALSE, warning=FALSE,echo=FALSE}
+library(RODBC)
+library(tidyverse)
+library(tibble)
+library("lubridate")
+library(dlookr)
+library(flextable) #beautifying tables
+conn1 <- odbcConnect("MYSQL_NEWMAN")
+movie_df <- sqlQuery(conn1,"SELECT * FROM movie")
+
+glimpse(movie_df)
+```
+
+#### Derived Dataset
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+movie_df$Rating_date <- as_datetime(movie_df$Tymestamp)
+movie_df$Weekday <- weekdays(movie_df$Rating_date)
+movie_df$Year <- year(movie_df$Rating_date)
+movie_df$Hour <- hour(movie_df$Rating_date)
+movie_df <- movie_df%>%select(-Tymestamp)
+glimpse(movie_df)
+```
+
+#### Rating Summary
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+summary(movie_df$rating)
+```
+
+#### Number of Raters
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+num_raters <- tibble(unique(movie_df$userid))
+total_raters <- num_raters %>% count()
+total_raters
+```
+
+#### Number of movies
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+num_movie <- tibble(unique(movie_df$Title))
+total_movie <- num_movie %>% count()
+total_movie
+```
+
+
+## What are the movies that have at least 50 Raters?
+
+```{r message=FALSE, warning=FALSE,echo=FALSE}
+rev<-movie_df %>%
+  group_by(Title)%>% summarise(Number_of_rev=n(),.groups='drop')%>%
+  arrange(desc(Number_of_rev))
+
+#THE FIRST 150 MOVIES WITH 50 REVIEWS AND ABOVE
+rev%>%filter(Number_of_rev>=150)%>%
+ggplot(aes(x=reorder(Title,Number_of_rev),y=Number_of_rev))+geom_col(fill="#BA25AE") + coord_flip() +geom_text(aes(label=Number_of_rev))+
+  labs(x="Movie Title", y="Number of Raters", title="Movies with more than 50 Raters")+theme_classic()
+
+#50 AND ABOVE REVIEW
+fifty_and_above <- rev%>%left_join(movie_df,by="Title")%>%
+  filter(Number_of_rev>=50)
+```
+
+
+
+The display of first 35th movies that have a minimum of 50 raters sorted according to the number of raters of each movie. It revealed that Terminator 3: Rise of the Machines as the movie with the highest number of raters.
+
+
+## What is the most rated movie?
+
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+#THE MOST 20 RATED MOVIES WITH 50 AND ABOVE REVIEWERS
+mov_rev_avg <- fifty_and_above %>% filter(Number_of_rev>=50) %>%
+  group_by(Title)%>% summarise(mean_rating=mean(rating,na.rm=TRUE))%>%
+  arrange(desc(mean_rating))%>%head(n=20)
+
+mov_rev_avg %>% ggplot(aes(x=reorder(Title,mean_rating),y=mean_rating))+geom_col(aes(fill="47DD9A")) +
+  coord_flip() +geom_text(aes(label=round(mean_rating,4))) +
+  labs(x="Movie Title", y="Average Rating", title="20 most rated Movies with more than 50 Raters")+theme_classic()
+
+```
+
+The average rating of each movie indicates that Sleepless in Seattle has the highest average rating. However, this average was taken for only the movies that have not less than 50 raters. I chose to select only movies with a minimum of 50 raters to reduce bias in the analysis. It is interesting to know that only 245 movies out of 2785 movies have 50 Raters and above. 
+
+
+## What day of the week do People rate movies the most?
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+#COUNT REVIEWS BY week DAYS
+movie_df %>% group_by(Weekday)%>% summarise(n=n())%>%
+ggplot(aes(x=reorder(Weekday,n),y=n))+geom_col(fill="#21D9BD")+ geom_text(aes(label=n))+
+  labs(x="Week day", y="Total Raters", title="Number of raters by week day")+theme_classic()
+```
+
+The count of the total number of raters that rated the movies shows that the highest number of rating was carried out on Tuesday. The lowest number of ratings was on Thursday. So, the range of number of raters between Tuesday and Thursday is 1562 raters. The range is a significant value. It makes sense to say that Tuesdays are the most favored days for movie rating. Meanwhile, I'm by no way saying that movie rating is mostly carried out by people on Tuesdays as this is on the realm of speculation until it is hypothesized and proven to be true. 
+
+
+## What day of the week did People give highest rating?
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+#I WANT TO KNOW IF THE WEEKDAY HAS RELATIONSHIP WITH RATING SCORE
+movie_df %>% group_by(Weekday)%>% summarise(Avg=mean(rating,na.rm=TRUE)) %>%
+ggplot(aes(Weekday,Avg))+geom_col(fill="#A569BD")+ geom_text(aes(label=round(Avg,4)))+
+  labs(x="Week day", y="Average Rating", title="Average Rating by Week day")+theme_classic()
+
+```
+
+The average week day rating indicates that weekday does not play any role on the value of rating given by the raters. This is so because the average rating across board can be approximated to be same. 
+
+
+## What is the relationship betweeen rating score and number of Raters?
+
+```{r message=FALSE, warning=FALSE,echo=FALSE}
+#MEAN OF 50 AND ABOVE REVIEW
+mean_rev_above50 <-fifty_and_above %>%
+  group_by(Title)%>% summarise(mean_rev=mean(rating,na.rm=TRUE))%>%
+  arrange(desc(mean_rev))
+
+#MEAN REVIEW # of Reviewers
+MeanRev_and_num_ofRev <- mean_rev_above50%>%left_join(fifty_and_above,by="Title") 
+
+#DRAW SCATTER PLOT BETWEEN NUMBER OF REVIEWERS AND AVERAGE RATING FOR Movies with 50 reviews and above
+mean_rev_above50%>%left_join(fifty_and_above,by="Title") %>%
+  ggplot(aes(Number_of_rev,mean_rev)) + geom_point(aes(position = "jitter")) + geom_smooth(se = FALSE)+
+  labs(x="Number of Raters", y="Average Rating", title="Relationship between number of raters and average rating")+theme_classic()
+```
+
+It is pertinent to view the relationship between the number of movie Raters and average rating. The relationship is positive. However, it will be naive to conclude based on this analysis that movie rating increases as number of Raters increase. Hypothesis testing is needed for such conclusion to be drawn. 
+
+
+## What rating score is most prevalent?
+
+```{r message=FALSE, warning=FALSE,echo=FALSE}
+movie_df %>% group_by(rating)%>% summarise(n=n())%>%
+ggplot(aes(reorder(rating,n),n))+geom_col(fill="#DF421F")+ geom_text(aes(label=n)) +
+  labs(x="Frequency/Count", y="Rating", title="Count of Unique Rating score")+theme_classic()
+
+
+
+#PERCENT OF Rating
+ggplot(movie_df, aes(x= rating)) + 
+    geom_bar(aes(y = ..prop..), stat="count") +
+    geom_text(aes( label = scales::percent(..prop..),
+                   y= ..prop.. ), stat= "count", vjust = -.5) +
+    labs(y = "Percent") +
+    scale_y_continuous(labels = scales::percent)+theme_classic()
+```
+
+Score 4 is the most prevalent rating followed by 3. Score 4 is approximately 38% i.e 17179 of the total rating. Having the median of 4, mean of 3.671 and the 3rd quartile as 4 are testaments that majority of movies are rated 4. The lowest frequent movies rating is 1. This is 4.3% of the entire rating. However, a substantial number of movies received 5 rating. A total of about 10335 i.e 23% of the total movies surveyed.
+
+
+## What year did People rate movies the most?
+
+```{r message=FALSE, warning=FALSE,echo=FALSE}
+#TO VIEW THE YEARS AND THE NUMBER OF REVIEWERS
+movie_df %>% group_by(Year)%>% summarise(n=n())%>%
+ggplot(aes(x=reorder(Year,n),y=n))+geom_col(fill="#D77E1A")+ geom_text(aes(label=n)) + 
+coord_flip()+ labs(x="Year", y="Number of Raters", title="Number of Rater over the years")+theme_classic()
+
+
+movie_1995 <- movie_df %>% filter(Year==1995)%>%select("movieId","Title","rating","Rating_date")
+movie_1995
+
+
+#TO VIEW THE trend of number of movie rating over the YEARS
+movie_df %>% group_by(Year)%>% summarise(n=n())%>%
+ggplot(aes(Year,n))+geom_line(fill="#D77E1A") +geom_point()+
+  labs(x="Year", y="Number of Raters", title="Distribution of Number of Rater over the years")
+```
+
+Majority of the rating was given in year 2000 followed by year 1996. The total number of rating in year 2000 is 6794 which is approximately 15% of all ratings over the years. 1996 has 4720 number of rating which is about 11% of all rating that took place. However, 1995 has 1 rating for the movie The Endless Summer.
+
+
+## What Time of the day do People give highest rating score?
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+#THE HOUR OF THE DAY WITH THE HIGHEST RATING
+movie_df %>% group_by(Hour)%>% summarise(mean_hr=mean(rating,na.rm=TRUE))%>%
+ggplot(aes(x=Hour,y=mean_hr))+geom_line()+geom_point()+geom_text(aes(label=Hour),color="blue")+
+  labs(y="Average Rating", title="Average rating by Hour")
+``` 
+
+From the graph above, the raters who rated the movies between the hours of 23:00 to 00:00 ie 11pm to 12mid night gave the best rating score. The highest average rating of approximately 4 was given at 12 mid night. The lowest rating score was given at 13:00 (1pm). The average rating score given at 1pm is 3.43.
+
+
+## What Time of the day do People rate movies the most(frequency)?
+
+```{r message=FALSE, warning=FALSE, echo=FALSE}
+#THE HOUR OF THE DAY WITH HIGHEST NUMBER OF REVIEWERS
+movie_df %>% group_by(Hour)%>% summarise(n=n())%>%
+ggplot(aes(x=reorder(Hour,n),y=n))+geom_col(fill="#DAF7A6")+ geom_text(aes(label=n))+
+coord_flip() +labs(x="Hour", y="Frequency/Count", title="Count of Raters by Hours")+theme_classic()
+
+
+#TO VIEW THE trend of the hour when people rate movie over the YEARS
+movie_df %>% group_by(Hour)%>% summarise(n=n())%>%
+ggplot(aes(Hour,n))+geom_line(fill="#D77E1A") +geom_point()+geom_text(aes(label=Hour),color="red")+
+  labs(y="Frequency/Count", title="Count of Raters by Hours")
+
+```
+
+Most Raters rated the movies at 20:00 to 22:00 (8pm-10pm) and 01:00am. The rare hour that raters rated any movie was at 13:00(1pm).
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
